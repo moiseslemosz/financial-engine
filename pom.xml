@@ -3,24 +3,35 @@
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
+ 
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.4.2</version> <relativePath/>
+        <version>3.4.2</version>
+        <relativePath/>
     </parent>
-
-    <groupId>com.seuusuario</groupId>
+ 
+    <!-- CORRIGIDO: groupId alinhado com o pacote Java -->
+    <groupId>com.motorfinanceiro</groupId>
     <artifactId>motor-financeiro</artifactId>
     <version>1.0.0-SNAPSHOT</version>
     <name>Motor Financeiro &amp; AI Gateway</name>
     <description>Sistema de análise financeira determinística com camada cognitiva</description>
-
+ 
     <properties>
-        <java.version>25</java.version>
-        <spring-ai.version>1.0.0-M4</spring-ai.version> <jsoup.version>1.17.2</jsoup.version>
+        <java.version>23</java.version>
+        <jsoup.version>1.17.2</jsoup.version>
+ 
+        <!--
+            Spring AI — Fase 3.
+            Versão 1.0.0 (GA) inclui o spring-ai-google-genai-spring-boot-starter.
+            O M4 original não tinha esse starter, causando o erro de build.
+        -->
+        <!-- <spring-ai.version>1.0.0</spring-ai.version> -->
     </properties>
-
+ 
     <dependencies>
+        <!-- ===== FASE 1 — CORE ===== -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
@@ -29,30 +40,38 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
-
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-cache</artifactId>
         </dependency>
+ 
+        <!-- Scraping de HTML com seletores CSS -->
         <dependency>
             <groupId>org.jsoup</groupId>
             <artifactId>jsoup</artifactId>
             <version>${jsoup.version}</version>
         </dependency>
+ 
+        <!-- Retry + Fallback automático (@Retryable) -->
         <dependency>
             <groupId>org.springframework.retry</groupId>
             <artifactId>spring-retry</artifactId>
         </dependency>
+        <!-- AOP é obrigatório para o @Retryable funcionar -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-aop</artifactId>
         </dependency>
-
+ 
+        <!-- ===== FASE 3 — SPRING AI + GEMINI Fase 3) ===== -->
+        <!--
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-google-genai-spring-boot-starter</artifactId>
         </dependency>
-
+        -->
+ 
+        <!-- ===== DEV / TEST ===== -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-devtools</artifactId>
@@ -65,7 +84,9 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
-
+ 
+    <!-- ===== FASE 3 — BOM do Spring AI ===== -->
+    <!--
     <dependencyManagement>
         <dependencies>
             <dependency>
@@ -77,12 +98,16 @@
             </dependency>
         </dependencies>
     </dependencyManagement>
-
+    -->
+ 
     <build>
         <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <mainClass>com.motorfinanceiro.MotorFinanceiroApplication</mainClass>
+                </configuration>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -97,14 +122,17 @@
             </plugin>
         </plugins>
     </build>
+ 
+    <!-- ===== FASE 3 — repositório do Spring AI ===== -->
+    <!--
     <repositories>
         <repository>
             <id>spring-milestones</id>
             <name>Spring Milestones</name>
             <url>https://repo.spring.io/milestone</url>
-            <snapshots>
-                <enabled>false</enabled>
-            </snapshots>
+            <snapshots><enabled>false</enabled></snapshots>
         </repository>
     </repositories>
+    -->
+ 
 </project>
