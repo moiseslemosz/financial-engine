@@ -1,0 +1,16 @@
+# Arquivos compilados e pacotes
+target/
+*.class
+*.jar
+*.war
+
+# Configurações do VS Code e Codespaces
+.vscode/
+.factorypath
+.project
+.classpath
+.settings/
+
+# Arquivos de log e SO
+*.log
+.DS_Store
