@@ -72,6 +72,17 @@ public class FiiController {
                     ));
         }
     }
+
+    @GetMapping("/fii/{ticker}/history")
+    public ResponseEntity<java.util.List<com.motorfinanceiro.model.FiiHistory>> getFiiHistory(@PathVariable String ticker) {
+        var history = fiiService.getFiiHistory(ticker);
+        
+        if (history.isEmpty()) {
+            return ResponseEntity.noContent().build(); // Retorna 204 se não houver histórico
+        }
+        
+        return ResponseEntity.ok(history); // Retorna 200 com a lista (Array JSON)
+    }
  
     /**
      * Limpa o cache de um ticker específico.

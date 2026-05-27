@@ -40,9 +40,9 @@ public class FundsExplorerScraperStrategy implements FiiScraperStrategy {
                     .get();
 
             // Lógica resiliente baseada em texto, não em classes CSS exatas
-            // 1. Tenta PRIMEIRO os seletores exatos que você pegou no Chrome
+            // 1. Tenta PRIMEIRO os seletores exatos e robustos
             String priceStr = extractTextBySelector(doc, "#carbon_fields_fiis_header-2 > div > div > div.headerTicker__content > div.headerTicker__content__price > p");
-            String dyStr = extractTextBySelector(doc, "#indicators > div:nth-child(3) > p:nth-child(2) > b");
+            String dyStr = extractTextBySelector(doc, "#indicators div:contains(Dividend Yield) b");
             String pvpStr = extractTextBySelector(doc, "#indicators div:contains(P/VP) + div"); 
 
             // 2. Se algum vier nulo (caso o site mude no futuro), aciona o Fallback genérico
