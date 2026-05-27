@@ -1,16 +1,23 @@
-# Arquivos compilados e pacotes
+# Maven
 target/
-*.class
 *.jar
 *.war
-
-# Configurações do VS Code e Codespaces
+ 
+# IDE
+.idea/
+*.iml
 .vscode/
-.factorypath
-.project
-.classpath
-.settings/
-
-# Arquivos de log e SO
+ 
+# Spring Boot
+application-local.properties
+ 
+# Variáveis de ambiente — NUNCA commitar
+.env
+ 
+# Logs
 *.log
+logs/
+ 
+# SO
 .DS_Store
+Thumbs.db
