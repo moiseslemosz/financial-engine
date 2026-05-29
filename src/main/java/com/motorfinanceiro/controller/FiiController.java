@@ -11,12 +11,13 @@ import java.time.LocalDateTime;
 import java.util.Map;
  
 /**
- * Controller responsável pelas rotas de FIIs e health check da aplicação.
+ * Controller responsável pelas rotas de dados, histórico e cache de FIIs.
  *
  * Rotas disponíveis:
- *   GET  /api/v1/fii/{ticker}             → dados de um FII específico
- *   POST /api/v1/fii/{ticker}/cache/clear → limpa o cache de um ticker
- *   GET  /api/v1/health                   → prova de vida da aplicação (para Koyeb/AWS)
+ * GET  /api/v1/fii/{ticker}             → dados de um FII específico (Scraper + Cache)
+ * GET  /api/v1/fii/{ticker}/history     → série histórica de cotações salva no banco
+ * POST /api/v1/fii/{ticker}/cache/clear → invalidação manual de cache
+ * GET  /api/v1/health                   → prova de vida da aplicação
  */
 @RestController
 @RequestMapping("/api/v1")
@@ -29,21 +30,7 @@ public class FiiController {
     }
  
     /**
-     * Passo 1.8 — Rota principal de FIIs.
-     *
-     * Retorna dados do fundo imobiliário: preço atual, Dividend Yield,
-     * P/VP, data da última atualização e fonte dos dados.
-     *
-     * O ticker é case-insensitive: "mxrf11", "MXRF11" e "Mxrf11" retornam o mesmo resultado.
-     *
-     * Exemplo:
-     *   GET /api/v1/fii/MXRF11
-     *
-     * Para testar via Hoppscotch (substituto online do Postman):
-     *   1. Acesse https://hoppscotch.io
-     *   2. Método: GET
-     *   3. URL: http://localhost:8080/api/v1/fii/MXRF11
-     *   4. Clique em Send
+     * Rota principal de cotação de FIIs.
      */
     @GetMapping("/fii/{ticker}")
     public ResponseEntity<?> getFii(@PathVariable String ticker) {
@@ -73,22 +60,22 @@ public class FiiController {
         }
     }
 
+    /**
+     * Rota de série histórica.
+     */
     @GetMapping("/fii/{ticker}/history")
     public ResponseEntity<java.util.List<com.motorfinanceiro.model.FiiHistory>> getFiiHistory(@PathVariable String ticker) {
-        var history = fiiService.getFiiHistory(ticker);
+        var history = fiiService.getFiiHistory(ticker.toUpperCase());
         
         if (history.isEmpty()) {
-            return ResponseEntity.noContent().build(); // Retorna 204 se não houver histórico
+            return ResponseEntity.noContent().build();
         }
         
-        return ResponseEntity.ok(history); // Retorna 200 com a lista (Array JSON)
+        return ResponseEntity.ok(history);
     }
  
     /**
      * Limpa o cache de um ticker específico.
-     * Útil quando os dados em cache estão desatualizados.
-     *
-     * Exemplo: POST /api/v1/fii/MXRF11/cache/clear
      */
     @PostMapping("/fii/{ticker}/cache/clear")
     public ResponseEntity<Map<String, String>> clearCache(@PathVariable String ticker) {
@@ -100,12 +87,7 @@ public class FiiController {
     }
  
     /**
-     * Passo 5.2 — Health Check da aplicação.
-     *
-     * Retorna 200 OK para indicar que a aplicação está no ar.
-     * Utilizado pelo Koyeb e pela AWS para manter o contêiner ativo.
-     *
-     * Exemplo: GET /api/v1/health
+     * Health Check da aplicação.
      */
     @GetMapping("/health")
     public ResponseEntity<Map<String, String>> health() {
