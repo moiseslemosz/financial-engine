@@ -4,17 +4,12 @@ import com.motorfinanceiro.dto.CopomRequestDTO;
 import com.motorfinanceiro.dto.CopomResponseDTO;
 import com.motorfinanceiro.dto.FiiAnaliseResponseDTO;
 import com.motorfinanceiro.dto.FiiResponseDTO;
-import com.motorfinanceiro.exception.ScraperException;
 import com.motorfinanceiro.service.CopomAnalyzerService;
 import com.motorfinanceiro.service.FiiAuditorService;
 import com.motorfinanceiro.service.FiiService;
 import jakarta.validation.Valid;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
- 
-import java.time.LocalDateTime;
-import java.util.Map;
  
 /**
  * Passo 3.3 — Camada cognitiva exposta via REST.
@@ -100,27 +95,9 @@ public class CopomController {
      */
     @GetMapping("/fii/{ticker}/analise")
     public ResponseEntity<?> analisarFii(@PathVariable String ticker) {
-        if (ticker == null || ticker.isBlank()) {
-            return ResponseEntity.badRequest()
-                    .body(Map.of("error", "Ticker inválido", "timestamp", LocalDateTime.now().toString()));
-        }
+        FiiResponseDTO dadosFii = fiiService.getFiiData(ticker.toUpperCase());
  
-        // Passo 1: dados numéricos via motor Java (scraper + cache)
-        FiiResponseDTO dadosFii;
-        try {
-            dadosFii = fiiService.getFiiData(ticker.toUpperCase());
-        } catch (ScraperException e) {
-            return ResponseEntity
-                    .status(HttpStatus.SERVICE_UNAVAILABLE)
-                    .body(Map.of(
-                            "error", "Não foi possível obter dados do FII",
-                            "message", e.getMessage(),
-                            "ticker", ticker.toUpperCase(),
-                            "timestamp", LocalDateTime.now().toString()
-                    ));
-        }
- 
-        // Passo 2: análise qualitativa via Gemini (IA nunca calcula — só interpreta)
+        // análise qualitativa via Gemini (IA nunca calcula — só interpreta)
         FiiAnaliseResponseDTO analise = fiiAuditorService.analisar(dadosFii);
         return ResponseEntity.ok(analise);
     }

@@ -6,13 +6,11 @@ import java.util.List;
  
 /**
  * Resposta enriquecida de um FII: dados numéricos do motor Java
- * combinados com a interpretação qualitativa da camada de IA.
- *
- * Princípio: os números vêm do código, a linguagem natural vem da IA.
+ * + análise completa da camada de IA (estrutura equivalente ao agente).
  */
 public record FiiAnaliseResponseDTO(
  
-    // ── Dados numéricos (Motor Java — determinístico) ──────────────
+    // ── Dados numéricos (Motor Java — determinístico) ──────────
     String ticker,
     BigDecimal currentPrice,
     BigDecimal dividendYield,
@@ -20,32 +18,63 @@ public record FiiAnaliseResponseDTO(
     String source,
     LocalDateTime lastUpdated,
  
-    // ── Análise qualitativa (Camada de IA — Gemini) ────────────────
+    // ── Classificação ───────────────────────────────────────────
+    String tipo,
+    String segmento,
  
-    /**
-     * Veredito resumido.
-     * OPORTUNIDADE = dados sugerem ponto interessante de entrada
-     * NEUTRO       = nem atrativo nem repulsivo no momento
-     * AGUARDAR     = sinais de cautela presentes
-     */
+    // ── Avaliação do P/VP e DY ──────────────────────────────────
+    String pvpStatus,
+    String dyAnalise,
+ 
+    // ── Veredicto qualitativo ────────────────────────────────────
+    /** OPORTUNIDADE | NEUTRO | AGUARDAR */
     String veredicto,
+    /** APROVADO | EM_OBSERVACAO | REPROVADO */
+    String veredictoStatus,
+    String veredictoJustificativa,
  
-    /** Análise contextualizada conectando preço, DY e P/VP */
+    // ── Análise principal ────────────────────────────────────────
     String analise,
  
-    /** Aspectos favoráveis identificados nos dados */
-    List<String> pontosFavoraveis,
+    // ── Análise histórica ────────────────────────────────────────
+    AnaliseHistoricaDTO analiseHistorica,
  
-    /** Pontos que merecem atenção antes de qualquer decisão */
+    // ── Simulador de rendimento ──────────────────────────────────
+    SimuladorFiiDTO simulador,
+ 
+    // ── Critérios condicionais por tipo ─────────────────────────
+    List<String> criteriosCondicionais,
+ 
+    // ── Matriz de risco ──────────────────────────────────────────
+    List<String> pontosFavoraveis,
     List<String> pontosAtencao,
  
-    /** Aviso legal obrigatório */
     String disclaimer,
- 
-    /** true se a análise de IA falhou (dados numéricos ainda retornados) */
     boolean erroAi,
- 
-    /** Motivo do erro de IA, se houver */
     String mensagemErro
  
-) {}
+) {
+    /**
+     * Análise histórica do fundo (últimos 3-5 anos).
+     * Baseada no conhecimento de treinamento da IA.
+     */
+    public record AnaliseHistoricaDTO(
+        String resistenciaCrises,
+        String tendencia3Anos,
+        String patrimonioLiquido3Anos,
+        String pvpVsMedia
+    ) {}
+ 
+    /**
+     * Simulador de rendimento com R$ 1.000 investidos.
+     * Usa o último dividendo conhecido pela IA (pode estar desatualizado).
+     */
+    public record SimuladorFiiDTO(
+        String dividendoPorCota,
+        String frequencia,
+        String cotas1000,
+        String rendimentoPorPagamento,
+        String rendimento12Meses,
+        String tendencia
+    ) {}
+}

@@ -14,17 +14,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
  
-/**
- * Agente: Tradutor do COPOM.
- *
- * Recebe o texto de uma Ata ou comunicado do COPOM e usa o Gemini
- * para retornar uma análise estruturada em linguagem acessível.
- *
- * ╔══════════════════════════════════════════════════════════════════╗
- * ║  Este service NUNCA executa cálculos financeiros.               ║
- * ║  Ele apenas interpreta linguagem — o motor Java calcula.        ║
- * ╚══════════════════════════════════════════════════════════════════╝
- */
 @Service
 public class CopomAnalyzerService {
  
@@ -41,112 +30,81 @@ public class CopomAnalyzerService {
         this.objectMapper = objectMapper;
     }
  
-    /**
-     * Analisa semanticamente um comunicado do COPOM.
-     *
-     * Fluxo:
-     * 1. Carrega o system prompt do arquivo de recurso
-     * 2. Envia o texto ao Gemini via Spring AI
-     * 3. Parseia o JSON retornado pelo modelo
-     * 4. Retorna CopomResponseDTO estruturado
-     *
-     * Em caso de falha da IA, retorna um DTO com erroAi=true
-     * e a mensagem de erro, sem lançar exceção para o controller.
-     *
-     * @param textoAta Texto da Ata ou comunicado do COPOM
-     * @return Análise estruturada com viés, impactos e frases-chave
-     */
     public CopomResponseDTO analisar(String textoAta) {
-        log.info("[COPOM] Iniciando análise semântica. Tamanho do texto: {} caracteres",
-                textoAta.length());
- 
-        String trechoReferencia = textoAta.substring(0, Math.min(200, textoAta.length())) + "...";
+        log.info("[COPOM] Iniciando análise. Tamanho: {} chars", textoAta.length());
+        String trecho = textoAta.substring(0, Math.min(200, textoAta.length())) + "...";
  
         try {
             String systemPrompt = systemPromptResource.getContentAsString(StandardCharsets.UTF_8);
- 
-            String jsonBruto = chatClient.prompt()
+            String jsonBruto    = chatClient.prompt()
                     .system(systemPrompt)
                     .user(textoAta)
                     .call()
                     .content();
  
-            log.debug("[COPOM] Resposta bruta da IA: {}", jsonBruto);
- 
-            return parsearResposta(jsonBruto, trechoReferencia);
+            log.debug("[COPOM] Resposta bruta: {}", jsonBruto);
+            return parsear(jsonBruto, trecho);
  
         } catch (Exception e) {
-            log.error("[COPOM] Falha ao chamar a IA: {}", e.getMessage());
-            return respostaDeErro(trechoReferencia, "Serviço de IA indisponível: " + e.getMessage());
+            log.error("[COPOM] Falha ao chamar IA: {}", e.getMessage());
+            return erro(trecho, "Serviço de IA indisponível: " + e.getMessage());
         }
     }
  
-    // =========================================================================
-    // PARSING DA RESPOSTA
-    // =========================================================================
- 
-    private CopomResponseDTO parsearResposta(String jsonBruto, String trechoReferencia) {
+    private CopomResponseDTO parsear(String jsonBruto, String trecho) {
         try {
-            String jsonLimpo = limparMarkdown(jsonBruto);
-            JsonNode root    = objectMapper.readTree(jsonLimpo);
+            String json = limpar(jsonBruto);
+            JsonNode root = objectMapper.readTree(json);
  
-            // Verifica se o modelo retornou um erro explícito
             if (root.has("erro")) {
-                return respostaDeErro(trechoReferencia, root.get("erro").asText());
+                return erro(trecho, root.get("erro").asText());
             }
  
+            // Roteamento de portfólio (objeto aninhado)
+            JsonNode rot = root.path("rotacaoPortfolio");
+            String rotRF  = textOr(rot, "rendaFixa", "");
+            String rotFii = textOr(rot, "fiis",       "");
+            String rotAcao= textOr(rot, "acao",       "");
+ 
             return new CopomResponseDTO(
-                    textOr(root, "vies", "NEUTRO"),
-                    textOr(root, "titulo", "Análise indisponível"),
-                    textOr(root, "resumo", ""),
-                    textOr(root, "impactoRendaFixa", ""),
-                    textOr(root, "impactoFiis", ""),
-                    parsearLista(root, "frasesChave"),
-                    textOr(root, "perspectiva", ""),
-                    trechoReferencia,
-                    false,
-                    null
+                    textOr(root, "vies",           "NEUTRO"),
+                    textOr(root, "titulo",          ""),
+                    textOr(root, "resumo",          ""),
+                    textOr(root, "impactoRendaFixa",""),
+                    textOr(root, "impactoFiis",     ""),
+                    lista(root, "frasesChave"),
+                    textOr(root, "perspectiva",     ""),
+                    rotRF, rotFii, rotAcao,
+                    trecho, false, null
             );
  
         } catch (Exception e) {
-            log.error("[COPOM] Falha ao parsear JSON da IA: {}", e.getMessage());
-            log.debug("[COPOM] JSON que falhou no parse: {}", jsonBruto);
-            return respostaDeErro(trechoReferencia,
-                    "Não foi possível interpretar a resposta da IA. Tente novamente.");
+            log.error("[COPOM] Falha no parse: {}", e.getMessage());
+            return erro(trecho, "Não foi possível interpretar a resposta da IA. Tente novamente.");
         }
     }
  
-    /**
-     * Remove formatação markdown que o modelo às vezes insere mesmo quando instruído a não fazer.
-     * Ex: ```json { ... } ``` → { ... }
-     */
-    private String limparMarkdown(String resposta) {
-        return resposta
-                .replaceAll("(?s)```json\\s*", "")
-                .replaceAll("(?s)```\\s*", "")
-                .trim();
+    private String limpar(String s) {
+        return s.replaceAll("(?s)```json\\s*", "").replaceAll("(?s)```\\s*", "").trim();
     }
  
-    private String textOr(JsonNode root, String field, String defaultValue) {
-        JsonNode node = root.path(field);
-        return node.isMissingNode() || node.isNull() ? defaultValue : node.asText();
+    private String textOr(JsonNode root, String field, String def) {
+        JsonNode n = root.path(field);
+        return (n.isMissingNode() || n.isNull()) ? def : n.asText();
     }
  
-    private List<String> parsearLista(JsonNode root, String field) {
-        JsonNode node = root.path(field);
-        List<String> result = new ArrayList<>();
-        if (node.isArray()) {
-            node.forEach(item -> result.add(item.asText()));
-        }
-        return result;
+    private List<String> lista(JsonNode root, String field) {
+        JsonNode n = root.path(field);
+        List<String> r = new ArrayList<>();
+        if (n.isArray()) n.forEach(i -> r.add(i.asText()));
+        return r;
     }
  
-    private CopomResponseDTO respostaDeErro(String trechoReferencia, String mensagem) {
+    private CopomResponseDTO erro(String trecho, String msg) {
         return new CopomResponseDTO(
                 "NEUTRO", null, null, null, null,
-                List.of(), null,
-                trechoReferencia,
-                true, mensagem
+                List.of(), null, null, null, null,
+                trecho, true, msg
         );
     }
 }

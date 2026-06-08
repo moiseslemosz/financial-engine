@@ -1,12 +1,10 @@
 package com.motorfinanceiro.controller;
  
 import com.motorfinanceiro.dto.FiiResponseDTO;
-import com.motorfinanceiro.exception.ScraperException;
 import com.motorfinanceiro.service.FiiService;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
- 
+
 import java.time.LocalDateTime;
 import java.util.Map;
  
@@ -33,32 +31,10 @@ public class FiiController {
      * Rota principal de cotação de FIIs.
      */
     @GetMapping("/fii/{ticker}")
-    public ResponseEntity<?> getFii(@PathVariable String ticker) {
-        if (ticker == null || ticker.isBlank() || ticker.length() < 5 || ticker.length() > 8) {
-            return ResponseEntity
-                    .badRequest()
-                    .body(Map.of(
-                            "error", "Ticker inválido",
-                            "message", "O ticker deve ter entre 5 e 8 caracteres. Ex: MXRF11",
-                            "timestamp", LocalDateTime.now().toString()
-                    ));
-        }
- 
-        try {
-            FiiResponseDTO data = fiiService.getFiiData(ticker.toUpperCase());
-            return ResponseEntity.ok(data);
- 
-        } catch (ScraperException e) {
-            return ResponseEntity
-                    .status(HttpStatus.SERVICE_UNAVAILABLE)
-                    .body(Map.of(
-                            "error", "Fonte de dados indisponível",
-                            "message", e.getMessage(),
-                            "ticker", ticker.toUpperCase(),
-                            "timestamp", LocalDateTime.now().toString()
-                    ));
-        }
-    }
+    public ResponseEntity<FiiResponseDTO> getFii(@PathVariable String ticker) {
+    FiiResponseDTO data = fiiService.getFiiData(ticker.toUpperCase());
+    return ResponseEntity.ok(data);
+}
 
     /**
      * Rota de série histórica.
