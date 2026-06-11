@@ -10,6 +10,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import com.motorfinanceiro.exception.AiQuotaExceededException;
  
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
@@ -138,6 +139,32 @@ public class GlobalExceptionHandler {
                         HttpStatus.SERVICE_UNAVAILABLE,
                         "Fonte de dados temporariamente indisponível. Tente novamente em instantes."
                 ));
+    }
+
+    /**
+     * Disparado quando todos os modelos da cadeia de fallback estão
+     * com cota esgotada ou indisponíveis.
+     * Retorna 503 com mensagem clara para o usuário.
+     */
+    @ExceptionHandler(AiQuotaExceededException.class)
+    public ResponseEntity<Map<String, Object>> handleAiQuota(AiQuotaExceededException ex) {
+        log.warn("[AI] Cadeia de fallback esgotada: {}", ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(buildErro(
+                        HttpStatus.SERVICE_UNAVAILABLE,
+                        ex.getMessage()
+                ));
+    }
+ 
+    /**
+     * Ignorar silenciosamente requisições de favicon.ico.
+     * O browser sempre faz essa requisição — não é um erro real.
+     */
+    @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
+    public ResponseEntity<Void> handleNoResource(
+            org.springframework.web.servlet.resource.NoResourceFoundException ex) {
+        return ResponseEntity.notFound().build();
     }
  
     // =========================================================================

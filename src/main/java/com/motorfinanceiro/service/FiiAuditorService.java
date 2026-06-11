@@ -6,9 +6,9 @@ import com.motorfinanceiro.dto.FiiAnaliseResponseDTO;
 import com.motorfinanceiro.dto.FiiAnaliseResponseDTO.AnaliseHistoricaDTO;
 import com.motorfinanceiro.dto.FiiAnaliseResponseDTO.SimuladorFiiDTO;
 import com.motorfinanceiro.dto.FiiResponseDTO;
+import com.motorfinanceiro.exception.AiQuotaExceededException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
@@ -19,24 +19,21 @@ import java.util.List;
  
 /**
  * Agente: Auditor de FIIs.
- *
- * Combina dados numéricos do motor Java com o conhecimento de treinamento
- * do Gemini para gerar análise estruturada equivalente ao agente original,
- * incluindo histórico, simulador de rendimento e veredito final.
+ * Usa AiFallbackService para chamadas resilientes com fallback automático de modelo.
  */
 @Service
 public class FiiAuditorService {
  
     private static final Logger log = LoggerFactory.getLogger(FiiAuditorService.class);
  
-    private final ChatClient.Builder chatClientBuilder;
+    private final AiFallbackService aiFallbackService;
     private final ObjectMapper objectMapper;
  
     @Value("classpath:prompts/fii-auditor.st")
     private Resource systemPromptResource;
  
-    public FiiAuditorService(ChatClient.Builder chatClientBuilder, ObjectMapper objectMapper) {
-        this.chatClientBuilder = chatClientBuilder;
+    public FiiAuditorService(AiFallbackService aiFallbackService, ObjectMapper objectMapper) {
+        this.aiFallbackService = aiFallbackService;
         this.objectMapper      = objectMapper;
     }
  
@@ -49,19 +46,18 @@ public class FiiAuditorService {
             String systemPrompt = systemPromptResource.getContentAsString(StandardCharsets.UTF_8);
             String userMsg      = formatarDados(fiiData);
  
-            String jsonBruto = chatClientBuilder.build()
-                    .prompt()
-                    .system(systemPrompt)
-                    .user(userMsg)
-                    .call()
-                    .content();
+            // AiFallbackService trata cota esgotada e timeout automaticamente
+            String jsonBruto = aiFallbackService.call(systemPrompt, userMsg);
  
             log.debug("[FiiAuditor] Resposta bruta: {}", jsonBruto);
             return parsear(fiiData, jsonBruto);
  
+        } catch (AiQuotaExceededException e) {
+            log.error("[FiiAuditor] Cadeia de fallback esgotada para {}: {}", fiiData.ticker(), e.getMessage());
+            return erro(fiiData, "Serviço de IA temporariamente indisponível. Tente novamente em alguns minutos.");
         } catch (Exception e) {
-            log.error("[FiiAuditor] Falha ao chamar IA para {}: {}", fiiData.ticker(), e.getMessage());
-            return erro(fiiData, "Serviço de IA indisponível: " + e.getMessage());
+            log.error("[FiiAuditor] Falha inesperada para {}: {}", fiiData.ticker(), e.getMessage());
+            return erro(fiiData, "Erro ao processar análise: " + e.getMessage());
         }
     }
  
@@ -100,14 +96,14 @@ public class FiiAuditorService {
                     fii.pvp(),
                     fii.source(),
                     fii.lastUpdated(),
-                    textOr(root, "tipo",                 "Desconhecido"),
-                    textOr(root, "segmento",             ""),
-                    textOr(root, "pvpStatus",            ""),
-                    textOr(root, "dyAnalise",            ""),
-                    textOr(root, "veredicto",            "NEUTRO"),
-                    textOr(root, "veredictoStatus",      "EM_OBSERVACAO"),
+                    textOr(root, "tipo",                  "Desconhecido"),
+                    textOr(root, "segmento",              ""),
+                    textOr(root, "pvpStatus",             ""),
+                    textOr(root, "dyAnalise",             ""),
+                    textOr(root, "veredicto",             "NEUTRO"),
+                    textOr(root, "veredictoStatus",       "EM_OBSERVACAO"),
                     textOr(root, "veredictoJustificativa",""),
-                    textOr(root, "analise",              ""),
+                    textOr(root, "analise",               ""),
                     parsearHistorico(root.path("analiseHistorica")),
                     parsearSimulador(root.path("simulador")),
                     lista(root, "criteriosCondicionais"),
@@ -118,10 +114,8 @@ public class FiiAuditorService {
                             "podem estar desatualizados. Confirme nas fontes oficiais antes de qualquer decisão."),
                     false, null
             );
- 
         } catch (Exception e) {
             log.error("[FiiAuditor] Falha no parse para {}: {}", fii.ticker(), e.getMessage());
-            log.debug("[FiiAuditor] JSON que falhou: {}", jsonBruto);
             return erro(fii, "Não foi possível interpretar a resposta da IA. Tente novamente.");
         }
     }
@@ -130,9 +124,9 @@ public class FiiAuditorService {
         if (node.isMissingNode() || node.isNull()) return null;
         return new AnaliseHistoricaDTO(
                 textOr(node, "resistenciaCrises",    "Não disponível"),
-                textOr(node, "tendencia3Anos",       "Não disponível"),
+                textOr(node, "tendencia3Anos",        "Não disponível"),
                 textOr(node, "patrimonioLiquido3Anos","Não disponível"),
-                textOr(node, "pvpVsMedia",           "Não disponível")
+                textOr(node, "pvpVsMedia",            "Não disponível")
         );
     }
  

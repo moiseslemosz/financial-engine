@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.motorfinanceiro.dto.CopomResponseDTO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
@@ -14,20 +13,24 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
  
+/**
+ * Agente: Tradutor do COPOM.
+ * Usa AiFallbackService para chamadas resilientes com fallback automático de modelo.
+ */
 @Service
 public class CopomAnalyzerService {
  
     private static final Logger log = LoggerFactory.getLogger(CopomAnalyzerService.class);
  
-    private final ChatClient chatClient;
+    private final AiFallbackService aiFallbackService;
     private final ObjectMapper objectMapper;
  
     @Value("classpath:prompts/copom-translator.st")
     private Resource systemPromptResource;
  
-    public CopomAnalyzerService(ChatClient chatClient, ObjectMapper objectMapper) {
-        this.chatClient   = chatClient;
-        this.objectMapper = objectMapper;
+    public CopomAnalyzerService(AiFallbackService aiFallbackService, ObjectMapper objectMapper) {
+        this.aiFallbackService = aiFallbackService;
+        this.objectMapper      = objectMapper;
     }
  
     public CopomResponseDTO analisar(String textoAta) {
@@ -36,48 +39,45 @@ public class CopomAnalyzerService {
  
         try {
             String systemPrompt = systemPromptResource.getContentAsString(StandardCharsets.UTF_8);
-            String jsonBruto    = chatClient.prompt()
-                    .system(systemPrompt)
-                    .user(textoAta)
-                    .call()
-                    .content();
+ 
+            // AiFallbackService trata cota esgotada e timeout automaticamente
+            String jsonBruto = aiFallbackService.call(systemPrompt, textoAta);
  
             log.debug("[COPOM] Resposta bruta: {}", jsonBruto);
             return parsear(jsonBruto, trecho);
  
+        } catch (com.motorfinanceiro.exception.AiQuotaExceededException e) {
+            log.error("[COPOM] Cadeia de fallback esgotada: {}", e.getMessage());
+            return erro(trecho, "Serviço de IA temporariamente indisponível. Tente novamente em alguns minutos.");
         } catch (Exception e) {
-            log.error("[COPOM] Falha ao chamar IA: {}", e.getMessage());
-            return erro(trecho, "Serviço de IA indisponível: " + e.getMessage());
+            log.error("[COPOM] Falha inesperada: {}", e.getMessage());
+            return erro(trecho, "Erro ao processar análise: " + e.getMessage());
         }
     }
  
     private CopomResponseDTO parsear(String jsonBruto, String trecho) {
         try {
-            String json = limpar(jsonBruto);
+            String json  = limpar(jsonBruto);
             JsonNode root = objectMapper.readTree(json);
  
             if (root.has("erro")) {
                 return erro(trecho, root.get("erro").asText());
             }
  
-            // Roteamento de portfólio (objeto aninhado)
-            JsonNode rot = root.path("rotacaoPortfolio");
-            String rotRF  = textOr(rot, "rendaFixa", "");
-            String rotFii = textOr(rot, "fiis",       "");
-            String rotAcao= textOr(rot, "acao",       "");
- 
+            JsonNode rot    = root.path("rotacaoPortfolio");
             return new CopomResponseDTO(
-                    textOr(root, "vies",           "NEUTRO"),
+                    textOr(root, "vies",            "NEUTRO"),
                     textOr(root, "titulo",          ""),
                     textOr(root, "resumo",          ""),
                     textOr(root, "impactoRendaFixa",""),
                     textOr(root, "impactoFiis",     ""),
                     lista(root, "frasesChave"),
                     textOr(root, "perspectiva",     ""),
-                    rotRF, rotFii, rotAcao,
+                    textOr(rot,  "rendaFixa",       ""),
+                    textOr(rot,  "fiis",            ""),
+                    textOr(rot,  "acao",            ""),
                     trecho, false, null
             );
- 
         } catch (Exception e) {
             log.error("[COPOM] Falha no parse: {}", e.getMessage());
             return erro(trecho, "Não foi possível interpretar a resposta da IA. Tente novamente.");
