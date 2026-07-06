@@ -275,6 +275,33 @@
 .vf-EM_OBSERVACAO .vf-title{color:var(--warn)}
 .vf-REPROVADO .vf-title{color:var(--neg)}
 .vf-just{font-size:.87rem;color:var(--text2);line-height:1.7}
+
+/* ── AÇÕES ── */
+.acao-hdr{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px;margin-bottom:4px}
+.acao-ticker{font-family:'Fraunces',Georgia,serif;font-optical-sizing:auto;font-size:2.4rem;font-weight:800;letter-spacing:-1.5px;line-height:1}
+.acao-empresa{font-size:.9rem;color:var(--text2);margin-bottom:4px}
+.acao-setor{font-family:'Fira Mono',monospace;font-size:.7rem;color:var(--text3);margin-bottom:16px}
+.fund-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border:1px solid var(--border);border-radius:8px;overflow:hidden;margin:14px 0}
+@media(max-width:600px){.fund-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:360px){.fund-grid{grid-template-columns:1fr}}
+.fund-item{padding:12px 14px;border-right:1px solid var(--border);border-bottom:1px solid var(--border)}
+.fund-item:nth-child(4n){border-right:none}
+@media(max-width:600px){.fund-item:nth-child(2n){border-right:none}}
+.fund-label{font-size:.65rem;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);margin-bottom:5px}
+.fund-val{font-family:'Fira Mono',monospace;font-size:.92rem;font-weight:500;color:var(--text)}
+.fund-val.pos{color:var(--pos)} .fund-val.neg{color:var(--neg)} .fund-val.warn{color:var(--warn)}
+.valuacao-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:4px}
+@media(max-width:480px){.valuacao-row{grid-template-columns:1fr}}
+.val-card{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:12px 14px}
+.val-card-label{font-size:.67rem;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:6px}
+.val-card-val{font-family:'Fira Mono',monospace;font-size:.95rem;font-weight:500;color:var(--text)}
+.val-card-val.ms-pos{color:var(--pos)} .val-card-val.ms-neg{color:var(--neg)}
+.acao-analise-bloco{font-size:.9rem;color:var(--text2);line-height:1.72;margin-bottom:4px}
+.acao-hist-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:4px}
+@media(max-width:540px){.acao-hist-grid{grid-template-columns:1fr}}
+.acao-hist-item{background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:10px 12px}
+.acao-hist-label{font-size:.67rem;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:4px}
+.acao-hist-val{font-size:.83rem;color:var(--text2);line-height:1.45}
   </style>
 </head>
 <body>
@@ -298,6 +325,7 @@
     <button class="nav-tab active" onclick="switchTab('fii')">FIIs</button>
     <button class="nav-tab" onclick="switchTab('rendafixa')">Renda Fixa</button>
     <button class="nav-tab" onclick="switchTab('copom')">COPOM</button>
+    <button class="nav-tab" onclick="switchTab('acoes')">Ações</button>
   </div></div>
 </nav>
  
@@ -372,7 +400,7 @@
     <p class="page-sub">A IA identifica o viés e traduz o impacto direto na rotação da sua carteira</p>
     <div class="field">
       <label>Texto da Ata ou comunicado do COPOM</label>
-      <textarea id="copomTexto" rows="6" placeholder="Cole aqui o texto da Ata. Disponível em bcb.gov.br/publicacoes/notacopom"></textarea>
+      <textarea id="copomTexto" rows="6" placeholder="Cole aqui o texto da Ata. Disponível em bcb.gov.br/publicacoes/atascopom"></textarea>
     </div>
     <div class="btn-row" style="margin-top:12px">
       <button class="btn btn-primary" onclick="analisarCopom()">✦ Analisar com IA →</button>
@@ -391,6 +419,39 @@
       </div>
     </details>
   </div>
+
+   <!-- AÇÕES -->
+<div id="panel-acoes" class="panel">
+  <h1 class="page-title">Ações — B3</h1>
+  <p class="page-sub">Dados fundamentalistas via Fundamentus com análise de valuação (Graham &amp; Bazin) opcional via IA</p>
+  <div class="form-row" style="grid-template-columns:1fr">
+    <div class="field">
+      <label>Ticker da ação</label>
+      <input id="acaoTicker" type="text" placeholder="VALE3, ITUB4, PETR4, WEGE3…"
+             maxlength="6" style="text-transform:uppercase;font-family:'Fira Mono',monospace;font-size:1rem;letter-spacing:1px"
+             onkeydown="if(event.key==='Enter')buscarAcao(false)"/>
+    </div>
+  </div>
+  <div class="btn-row">
+    <button class="btn btn-primary" onclick="buscarAcao(false)">Buscar dados →</button>
+    <button class="btn btn-outline" onclick="buscarAcao(true)">✦ + Análise de IA</button>
+  </div>
+  <div id="acao-result" class="result-area hidden"></div>
+  <details class="glossario">
+    <summary>Glossário — Ações</summary>
+    <div class="gloss-grid">
+      <div class="gloss-item"><div class="gloss-term">P/L (Preço / Lucro)</div><div class="gloss-def">Quantos anos levaria para recuperar o investimento com o lucro atual. Abaixo de 10 é barato, acima de 25 pode indicar preço elevado.</div></div>
+      <div class="gloss-item"><div class="gloss-term">P/VP (Preço / Val. Patrimonial)</div><div class="gloss-def">Compara o preço da ação com o patrimônio da empresa por ação. Abaixo de 1 = comprando com desconto sobre o patrimônio.</div></div>
+      <div class="gloss-item"><div class="gloss-term">ROE</div><div class="gloss-def">Retorno sobre Patrimônio Líquido. Mede a eficiência da empresa em gerar lucro com o dinheiro dos sócios. Acima de 15% é excelente.</div></div>
+      <div class="gloss-item"><div class="gloss-term">ROIC</div><div class="gloss-def">Retorno sobre Capital Investido. Mede se a empresa gera valor acima do custo de capital. Acima de 12% é referência saudável.</div></div>
+      <div class="gloss-item"><div class="gloss-term">EV/EBITDA</div><div class="gloss-def">Valor da empresa dividido pelo lucro operacional. Quanto menor, mais barata a empresa está em relação à sua geração de caixa.</div></div>
+      <div class="gloss-item"><div class="gloss-term">Margem Líquida</div><div class="gloss-def">Percentual da receita que vira lucro após todos os custos e impostos. Acima de 10% indica negócio saudável.</div></div>
+      <div class="gloss-item"><div class="gloss-term">Preço Justo de Graham</div><div class="gloss-def">Fórmula clássica: √(22,5 × LPA × VPA). Benjamin Graham usava essa equação para encontrar empresas baratas com boa margem de segurança.</div></div>
+      <div class="gloss-item"><div class="gloss-term">Preço Justo de Bazin</div><div class="gloss-def">DPA ÷ 6%. Décio Bazin considerava justa uma ação que paga pelo menos 6% ao ano em dividendos em relação ao preço.</div></div>
+      <div class="gloss-item"><div class="gloss-term">Margem de Segurança</div><div class="gloss-def">Diferença entre o preço justo calculado e o preço de mercado. Positiva = comprando abaixo do valor intrínseco. Graham recomendava mínimo de 25%.</div></div>
+    </div>
+  </details>
+</div>
  
 </div></main>
  
@@ -422,7 +483,7 @@ function toggleTheme(){
 updateThemeBtn();
  
 /* ── TABS ── */
-var TABS=['fii','rendafixa','copom'];
+var TABS=['fii','rendafixa','copom', 'acoes'];
 function switchTab(id){
   TABS.forEach(function(t,i){
     document.querySelectorAll('.nav-tab')[i].classList.toggle('active',t===id);
@@ -450,6 +511,102 @@ function loading(id){
 function errMsg(id,msg){var el=document.getElementById(id);el.classList.remove('hidden');el.innerHTML='<div class="error-box">⚠ '+ESC(msg)+'</div>'}
 function show(id,html){var el=document.getElementById(id);el.classList.remove('hidden');el.innerHTML=html}
  
+/* ── AÇÕES ── */
+async function buscarAcao(comIa) {
+  var ticker=(document.getElementById('acaoTicker').value||'').trim().toUpperCase();
+  if(!ticker){alert('Digite o ticker da ação.');return}
+  loading('acao-result');
+  try{
+    var url=comIa?'/api/v1/acao/'+ticker+'/analise':'/api/v1/acao/'+ticker;
+    var res=await fetch(url);var d=await res.json();
+    if(!res.ok){errMsg('acao-result',d.message||d.error||'Erro ao buscar.');return}
+    show('acao-result',renderAcao(d,comIa));
+  }catch(e){errMsg('acao-result','Não foi possível conectar à API.')}
+}
+
+function fundVal(v,sufixo,limitePos,limiteNeg){
+  if(v==null)return'<span class="fund-val">—</span>';
+  var n=Number(v);var cls='';
+  if(limitePos!=null&&n>=limitePos)cls='pos';
+  else if(limiteNeg!=null&&n<limiteNeg)cls='neg';
+  return'<span class="fund-val '+cls+'">'+NUM(v)+(sufixo||'')+'</span>';
+}
+
+function margemCls(ms){
+  if(!ms)return'';
+  return ms.toLowerCase().includes('abaixo')||ms.includes('-')?'ms-neg':'ms-pos';
+}
+
+function renderAcao(d,comIa){
+  var h='<div class="acao-hdr"><div class="acao-ticker">'+ESC(d.ticker)+'</div><div class="fii-src">Fonte: '+ESC(d.source)+' · '+DT(d.lastUpdated)+'</div></div>';
+  if(comIa&&d.empresa){h+='<div class="acao-empresa">'+ESC(d.empresa)+'</div>'}
+  if(comIa&&d.setor){h+='<div class="acao-setor">'+ESC(d.setor)+(d.segmento?' · '+ESC(d.segmento):'')+'</div>'}
+
+  h+='<div class="fund-grid">'+
+    '<div class="fund-item"><div class="fund-label">Cotação</div>'+fundVal(d.cotacao,' R$',null,null)+'</div>'+
+    '<div class="fund-item"><div class="fund-label">P/L</div>'+fundVal(d.pl,'',null,0)+'</div>'+
+    '<div class="fund-item"><div class="fund-label">P/VP</div>'+fundVal(d.pvp,'',null,0)+'</div>'+
+    '<div class="fund-item"><div class="fund-label">Div. Yield</div>'+fundVal(d.dividendYield,'%',6,null)+'</div>'+
+    '<div class="fund-item"><div class="fund-label">ROE</div>'+fundVal(d.roe,'%',15,null)+'</div>'+
+    '<div class="fund-item"><div class="fund-label">ROIC</div>'+fundVal(d.roic,'%',12,null)+'</div>'+
+    '<div class="fund-item"><div class="fund-label">Marg. Líquida</div>'+fundVal(d.margemLiquida,'%',10,null)+'</div>'+
+    '<div class="fund-item"><div class="fund-label">Marg. EBIT</div>'+fundVal(d.margemEbit,'%',10,null)+'</div>'+
+    '<div class="fund-item"><div class="fund-label">EV/EBITDA</div>'+fundVal(d.evEbitda,'',null,null)+'</div>'+
+    '<div class="fund-item"><div class="fund-label">Dív./Patrim.</div>'+fundVal(d.dividaBrutaPatrim,'',null,null)+'</div>'+
+    '<div class="fund-item"><div class="fund-label">Cresc. Rec. 5a</div>'+fundVal(d.crescRec5a,'%',8,0)+'</div>'+
+    '<div class="fund-item"><div class="fund-label">Liq. Corrente</div>'+fundVal(d.liqCorrente,'',1.5,1.0)+'</div>'+
+  '</div>';
+
+  if(comIa&&!d.erroAi){
+    var vc={COMPRA:'vOPO',NEUTRO:'vNEU',EVITAR:'vAGU'}[d.veredicto]||'vNEU';
+    var vi={COMPRA:'✦',NEUTRO:'→',EVITAR:'◬'}[d.veredicto]||'→';
+    var vst=d.veredictoStatus||'EM_OBSERVACAO';
+    h+='<div style="border-top:1px solid var(--rule);padding-top:22px;margin-top:8px">'+
+      '<div class="ai-hdr"><div class="ai-pip"></div> Análise de IA — Gemini</div>'+
+      '<div class="veredicto '+vc+'">'+vi+' '+ESC(d.veredicto)+'</div>';
+    if(d.precoJustoGraham||d.precoJustoBazin){
+      h+=rl('Valuação')+
+      '<div class="valuacao-row">'+
+        '<div class="val-card"><div class="val-card-label">Preço Justo Graham</div><div class="val-card-val">'+ESC(d.precoJustoGraham||'N/A')+'</div></div>'+
+        '<div class="val-card"><div class="val-card-label">Preço Justo Bazin</div><div class="val-card-val">'+ESC(d.precoJustoBazin||'N/A')+'</div></div>'+
+        '<div class="val-card"><div class="val-card-label">Margem de Segurança</div><div class="val-card-val '+margemCls(d.margemSeguranca||'')+'">'+ESC(d.margemSeguranca||'—')+'</div></div>'+
+      '</div>';
+    }
+    if(d.analiseValuacao){h+=rl('Valuação & Preço')+
+      '<p class="acao-analise-bloco">'+ESC(d.analiseValuacao)+'</p>'}
+    if(d.analiseQualidade){h+=rl('Qualidade do Negócio')+
+      '<p class="acao-analise-bloco">'+ESC(d.analiseQualidade)+'</p>'}
+    if(d.analiseRisco){h+=rl('Riscos')+
+      '<p class="acao-analise-bloco">'+ESC(d.analiseRisco)+'</p>'}
+    var ah=d.analiseHistorica;
+    if(ah&&(ah.resistenciaCrises||ah.tendenciaLucros)){
+      h+=rl('Análise Histórica')+
+      '<div class="acao-hist-grid">'+
+        '<div class="acao-hist-item"><div class="acao-hist-label">Resistência a Crises</div><div class="acao-hist-val">'+ESC(ah.resistenciaCrises||'—')+'</div></div>'+
+        '<div class="acao-hist-item"><div class="acao-hist-label">Tendência de Lucros</div><div class="acao-hist-val">'+ESC(ah.tendenciaLucros||'—')+'</div></div>'+
+        '<div class="acao-hist-item"><div class="acao-hist-label">Política de Dividendos</div><div class="acao-hist-val">'+ESC(ah.politicaDividendos||'—')+'</div></div>'+
+      '</div>';
+    }
+    h+='<div class="pts-row">'+
+      '<div class="pts-box fav"><div class="pts-title fav">Favorável</div><ul class="pts-list">'+
+      (d.pontosFavoraveis||[]).map(function(p){return'<li>'+ESC(p)+'</li>'}).join('')+'</ul></div>'+
+      '<div class="pts-box att"><div class="pts-title att">Atenção</div><ul class="pts-list">'+
+      (d.pontosAtencao||[]).map(function(p){return'<li>'+ESC(p)+'</li>'}).join('')+'</ul></div>'+
+    '</div>';
+    if(vst){
+      h+=rl('Veredito Final')+
+      '<div class="veredito-final vf-'+vst+'">'+
+        '<div class="vf-title">'+veredictoStatusLabel(vst)+'</div>'+
+        '<div class="vf-just">'+ESC(d.veredictoJustificativa||'')+'</div>'+
+      '</div>';
+    }
+    h+='<p class="disc">'+ESC(d.disclaimer)+'</p></div>';
+  }else if(comIa&&d.erroAi){
+    h+='<div class="error-box" style="margin-top:16px">IA indisponível: '+ESC(d.mensagemErro)+'</div>';
+  }
+  return h;
+}
+
 /* ── API STATUS ── */
 async function checkApi(){
   try{
