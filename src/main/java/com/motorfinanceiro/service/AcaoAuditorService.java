@@ -132,6 +132,7 @@ public class AcaoAuditorService {
                     textOr(root, "analiseValuacao",  ""),
                     textOr(root, "analiseQualidade", ""),
                     textOr(root, "analiseRisco",     ""),
+                    parsearSimulador(root.path("simulador")),
                     parsearHistorico(root.path("analiseHistorica")),
                     lista(root, "pontosFavoraveis"),
                     lista(root, "pontosAtencao"),
@@ -181,10 +182,21 @@ public class AcaoAuditorService {
                 "Não identificado", "", a.ticker(),
                 "N/A", "N/A", "",
                 "NEUTRO", "EM_OBSERVACAO", "", "", "", "",
-                null,
+                null, // <--- Simulador (Adicionado)
+                null, // <--- Analise Historica
                 List.of(), List.of(),
                 "Este conteúdo é meramente informativo.",
                 true, msg
+        );
+    }
+
+    private AcaoAnaliseResponseDTO.SimuladorAcaoDTO parsearSimulador(JsonNode node) {
+        if (node.isMissingNode() || node.isNull()) return null;
+        return new AcaoAnaliseResponseDTO.SimuladorAcaoDTO(
+                textOr(node, "frequencia", "Não disponível"),
+                textOr(node, "analiseSetorial", "Não disponível"),
+                textOr(node, "cotas1000", "—"),
+                textOr(node, "rendimento12Meses", "—")
         );
     }
 }

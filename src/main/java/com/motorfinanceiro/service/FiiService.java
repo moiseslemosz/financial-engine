@@ -19,9 +19,10 @@ public class FiiService {
  
     private static final Logger log = LoggerFactory.getLogger(FiiService.class);
  
-    private final FiiScraperStrategy primaryStrategy;
-    private final FiiScraperStrategy fallbackStrategy;
-    private final FiiHistoryRepository fiiHistoryRepository; // INJEÇÃO DO REPOSITÓRIO
+    private final FiiHistoryRepository fiiHistoryRepository;
+    
+    // Lista que conterá a nossa "corrente" de raspadores na ordem certa
+    private final List<FiiScraperStrategy> scraperChain;
  
     @Value("${fii.health-check.test-ticker:MXRF11}")
     private String healthCheckTicker;
@@ -29,49 +30,64 @@ public class FiiService {
     public FiiService(
             @Qualifier("primaryStrategy")  FiiScraperStrategy primaryStrategy,
             @Qualifier("fallbackStrategy") FiiScraperStrategy fallbackStrategy,
+            Investidor10ScraperStrategy investidor10Strategy,
+            FundamentusFiiScraperStrategy fundamentusFiiStrategy,
             FiiHistoryRepository fiiHistoryRepository) {
-        this.primaryStrategy  = primaryStrategy;
-        this.fallbackStrategy = fallbackStrategy;
+            
         this.fiiHistoryRepository = fiiHistoryRepository;
+        
+        // Define a ordem de prioridade: 1. StatusInvest, 2. Fundamentus, , 3. FundsExplorer (Para FIIs tradicionais), 3. Investidor10 (Último recurso)
+        this.scraperChain = List.of(primaryStrategy, fundamentusFiiStrategy, fallbackStrategy, investidor10Strategy);
     }
  
     @Cacheable(value = "fii", key = "#ticker.toUpperCase()")
     public FiiResponseDTO getFiiData(String ticker) {
         log.info("[FiiService] Cache MISS para {}. Iniciando extração de dados...", ticker);
- 
-        // Tentativa 1: fonte primária
-        try {
-            FiiResponseDTO result = primaryStrategy.extractFiiData(ticker);
-            saveHistory(result); // GRAVA NO BANCO
-            log.info("[FiiService] Sucesso via {}. Ticker: {} | Preço: {}",
-                    primaryStrategy.getSourceName(), ticker, result.currentPrice());
-            return result;
- 
-        } catch (ScraperException primaryException) {
-            log.warn("[FiiService] {} falhou para {}. Motivo: {}. Acionando fallback: {}...",
-                    primaryStrategy.getSourceName(),
-                    ticker,
-                    primaryException.getMessage(),
-                    fallbackStrategy.getSourceName());
+        
+        FiiResponseDTO partialResult = null;
+        Exception lastException = null;
+
+        // Percorre todos os scrapers configurados
+        for (FiiScraperStrategy strategy : scraperChain) {
+            try {
+                FiiResponseDTO result = strategy.extractFiiData(ticker);
+                
+                // VALIDAÇÃO DE QUALIDADE (Se tem P/VP, é o dado perfeito!)
+                if (result.pvp() != null) {
+                    saveHistory(result); // Grava no banco de dados
+                    log.info("[FiiService] Sucesso completo via {}. Ticker: {} | Preço: {}",
+                            strategy.getSourceName(), ticker, result.currentPrice());
+                    return result; 
+                }
+                
+                // Se chegou aqui, o Scraper funcionou, mas o P/VP veio nulo
+                if (partialResult == null) {
+                    partialResult = result; // Guarda o primeiro resultado parcial (para não devolver a tela vazia)
+                }
+                
+                log.warn("[{}] {} retornou sem P/VP. Tentando a próxima fonte...", strategy.getSourceName(), ticker);
+
+            } catch (Exception e) {
+                lastException = e;
+                log.warn("[FiiService] {} falhou para {}. Motivo: {}", strategy.getSourceName(), ticker, e.getMessage());
+            }
         }
- 
-        // Tentativa 2: fallback automático
-        try {
-            FiiResponseDTO result = fallbackStrategy.extractFiiData(ticker);
-            saveHistory(result); // GRAVA NO BANCO
-            log.info("[FiiService] Sucesso via fallback ({}). Ticker: {} | Preço: {}",
-                    fallbackStrategy.getSourceName(), ticker, result.currentPrice());
-            return result;
- 
-        } catch (ScraperException fallbackException) {
-            log.error("[FiiService] Todas as fontes falharam para {}. Verifique os logs acima para detalhes.", ticker);
-            throw new ScraperException("Todas as fontes de dados falharam para o ticker: " + ticker, fallbackException);
+
+        // Se o loop terminou e NENHUMA fonte tem o P/VP, devolvemos o resultado parcial
+        if (partialResult != null) {
+            saveHistory(partialResult); // Grava o parcial no banco de dados
+            log.warn("[FiiService] Nenhuma fonte trouxe o P/VP para {}. Retornando dados parciais.", ticker);
+            return partialResult;
         }
+
+        // Se falhou tudo (ex: bloqueios de rede em todas as fontes)
+        log.error("[FiiService] Todas as fontes falharam para {}.", ticker);
+        throw new ScraperException("Todas as fontes de dados falharam para o ticker: " + ticker, lastException);
     }
     
     /**
-     * Salva o registro no banco de dados de forma silenciosa.
-     * Se o banco falhar, o erro é logado mas a API continua respondendo.
+     * Salva o registo na base de dados de forma silenciosa.
+     * Se o banco falhar, o erro é logado mas a API continua a responder.
      */
     private void saveHistory(FiiResponseDTO result) {
         try {
@@ -97,12 +113,14 @@ public class FiiService {
     @Scheduled(fixedRate = 3_600_000, initialDelay = 60_000)
     public void healthCheckEndpoints() {
         log.info("[HealthCheck] Iniciando verificação de saúde dos endpoints externos...");
-        checkSource(primaryStrategy);
-        checkSource(fallbackStrategy);
+        // Verifica a saúde de todas as fontes da nossa corrente
+        for(FiiScraperStrategy strategy : scraperChain) {
+            checkSource(strategy);
+        }
         log.info("[HealthCheck] Verificação concluída.");
     }
 
-    public java.util.List<FiiHistory> getFiiHistory(String ticker) {
+    public List<FiiHistory> getFiiHistory(String ticker) {
         log.info("[FiiService] Buscando histórico no banco para o ticker: {}", ticker);
         return fiiHistoryRepository.findByTickerOrderByRecordedAtDesc(ticker.toUpperCase());
     }

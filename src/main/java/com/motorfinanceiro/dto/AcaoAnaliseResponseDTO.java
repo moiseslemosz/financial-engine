@@ -49,6 +49,8 @@ public record AcaoAnaliseResponseDTO(
     String analiseQualidade,
     String analiseRisco,
 
+    SimuladorAcaoDTO simulador,
+
     // ── Análise histórica ──────────────────────────────────────────────
     AnaliseHistoricaAcaoDTO analiseHistorica,
 
@@ -68,5 +70,12 @@ public record AcaoAnaliseResponseDTO(
         String resistenciaCrises,
         String tendenciaLucros,
         String politicaDividendos
+    ) {}
+
+    public record SimuladorAcaoDTO(
+        String frequencia,
+        String analiseSetorial,
+        String cotas1000,
+        String rendimento12Meses
     ) {}
 }

@@ -155,6 +155,7 @@
     .tipo-tijolo{background:var(--warn-bg);color:var(--warn);border:1px solid rgba(212,148,48,.3)}
     .tipo-fiagro{background:var(--pos-bg);color:var(--pos);border:1px solid rgba(90,191,120,.3)}
     .tipo-fof{background:rgba(160,120,200,.12);color:#a078c8;border:1px solid rgba(160,120,200,.3)}
+    .tipo-infra{background:rgba(234,88,12,0.12);color:#ea580c;border:1px solid rgba(234,88,12,0.3)}
     .tipo-desc{font-family:'Fira Mono',monospace;font-size:.72rem;color:var(--text3);margin-bottom:14px}
     .pvp-status{font-size:.8rem;margin-bottom:10px;padding:6px 12px;border-radius:5px;display:inline-block}
     .pvp-ok{background:var(--pos-bg);color:var(--pos)}
@@ -359,6 +360,7 @@
         <div class="gloss-item"><div class="gloss-term">Fiagro</div><div class="gloss-def">Fundo do Agronegócio. Semelhante a FII de Papel, mas investe em CRAs e outros títulos do setor agrícola.</div></div>
         <div class="gloss-item"><div class="gloss-term">FoF (Fundo de Fundos)</div><div class="gloss-def">Investe em cotas de outros FIIs. Oferece diversificação automática, mas cobra taxa de gestão em dois níveis.</div></div>
         <div class="gloss-item"><div class="gloss-term">WALT</div><div class="gloss-def">Prazo médio ponderado dos contratos de aluguel. Quanto maior, mais previsível e estável é a receita do fundo.</div></div>
+        <div class="gloss-item"><div class="gloss-term">FI-Infra</div><div class="gloss-def">Fundo de Infraestrutura. Investe em Debêntures Incentivadas (energia, saneamento, rodovias). Os rendimentos e o ganho de capital são isentos de IR para pessoa física.</div></div>
       </div>
     </details>
   </div>
@@ -560,10 +562,22 @@ function renderAcao(d,comIa){
   if(comIa&&!d.erroAi){
     var vc={COMPRA:'vOPO',NEUTRO:'vNEU',EVITAR:'vAGU'}[d.veredicto]||'vNEU';
     var vi={COMPRA:'✦',NEUTRO:'→',EVITAR:'◬'}[d.veredicto]||'→';
-    var vst=d.veredictoStatus||'EM_OBSERVACAO';
+    var vst=(d.veredictoStatus||'EM_OBSERVACAO').replace('_', ' ');
+    
     h+='<div style="border-top:1px solid var(--rule);padding-top:22px;margin-top:8px">'+
       '<div class="ai-hdr"><div class="ai-pip"></div> Análise de IA — Gemini</div>'+
-      '<div class="veredicto '+vc+'">'+vi+' '+ESC(d.veredicto)+'</div>';
+      
+      // NOVO: Veredito Unificado (Ações)
+      '<div class="veredicto '+vc+'" style="display:flex; align-items:baseline; flex-wrap:wrap;">'+
+      vi+' '+ESC(d.veredicto)+
+      '<span style="font-size:0.5em; margin-left:12px; font-family:var(--font-ui); font-weight:600; opacity:0.8; letter-spacing:1px; text-transform:uppercase;">— '+ESC(vst)+'</span>'+
+      '</div>';
+      
+    // NOVO: Justificativa logo abaixo
+    if (d.veredictoJustificativa) {
+        h += '<p style="font-size:.92rem; color:var(--text); font-weight:500; margin-bottom:16px; border-left:3px solid var(--border); padding-left:12px;">' + ESC(d.veredictoJustificativa) + '</p>';
+    }
+
     if(d.precoJustoGraham||d.precoJustoBazin){
       h+=rl('Valuação')+
       '<div class="valuacao-row">'+
@@ -572,12 +586,23 @@ function renderAcao(d,comIa){
         '<div class="val-card"><div class="val-card-label">Margem de Segurança</div><div class="val-card-val '+margemCls(d.margemSeguranca||'')+'">'+ESC(d.margemSeguranca||'—')+'</div></div>'+
       '</div>';
     }
-    if(d.analiseValuacao){h+=rl('Valuação & Preço')+
-      '<p class="acao-analise-bloco">'+ESC(d.analiseValuacao)+'</p>'}
-    if(d.analiseQualidade){h+=rl('Qualidade do Negócio')+
-      '<p class="acao-analise-bloco">'+ESC(d.analiseQualidade)+'</p>'}
-    if(d.analiseRisco){h+=rl('Riscos')+
-      '<p class="acao-analise-bloco">'+ESC(d.analiseRisco)+'</p>'}
+    
+    // NOVO: Simulador de Ações
+    var sim = d.simulador;
+    if (sim && sim.cotas1000) {
+      h += rl('Simulador & Dividendos') +
+        '<div class="sim-grid" style="grid-template-columns:1fr 1fr;">' +
+        simItem('Pagamento Histórico', sim.frequencia) +
+        simItem('DY vs Setor', sim.analiseSetorial) +
+        simItem('Cotas com R$ 1.000', sim.cotas1000) +
+        simItem('Rend. estimado 12 meses', sim.rendimento12Meses) +
+        '</div>';
+    }
+
+    if(d.analiseValuacao){h+=rl('Valuação & Preço')+'<p class="acao-analise-bloco">'+ESC(d.analiseValuacao)+'</p>'}
+    if(d.analiseQualidade){h+=rl('Qualidade do Negócio')+'<p class="acao-analise-bloco">'+ESC(d.analiseQualidade)+'</p>'}
+    if(d.analiseRisco){h+=rl('Riscos')+'<p class="acao-analise-bloco">'+ESC(d.analiseRisco)+'</p>'}
+    
     var ah=d.analiseHistorica;
     if(ah&&(ah.resistenciaCrises||ah.tendenciaLucros)){
       h+=rl('Análise Histórica')+
@@ -593,13 +618,7 @@ function renderAcao(d,comIa){
       '<div class="pts-box att"><div class="pts-title att">Atenção</div><ul class="pts-list">'+
       (d.pontosAtencao||[]).map(function(p){return'<li>'+ESC(p)+'</li>'}).join('')+'</ul></div>'+
     '</div>';
-    if(vst){
-      h+=rl('Veredito Final')+
-      '<div class="veredito-final vf-'+vst+'">'+
-        '<div class="vf-title">'+veredictoStatusLabel(vst)+'</div>'+
-        '<div class="vf-just">'+ESC(d.veredictoJustificativa||'')+'</div>'+
-      '</div>';
-    }
+    
     h+='<p class="disc">'+ESC(d.disclaimer)+'</p></div>';
   }else if(comIa&&d.erroAi){
     h+='<div class="error-box" style="margin-top:16px">IA indisponível: '+ESC(d.mensagemErro)+'</div>';
@@ -640,9 +659,11 @@ function tipoClass(t){
   if(tl.includes('papel'))return'tipo-papel';
   if(tl.includes('tijolo'))return'tipo-tijolo';
   if(tl.includes('fiagro'))return'tipo-fiagro';
+  if(tl.includes('infra'))return'tipo-infra'; 
   if(tl.includes('fof')||tl.includes('fundo de fundo'))return'tipo-fof';
   return'tipo-papel';
 }
+ 
 function tipoIcon(t){
   if(!t)return'';
   var tl=t.toLowerCase();
@@ -652,6 +673,7 @@ function tipoIcon(t){
   if(tl.includes('lajes'))return'🏢';
   if(tl.includes('residencial'))return'🏠';
   if(tl.includes('fiagro'))return'🌾';
+  if(tl.includes('infra'))return'⚡'; 
   if(tl.includes('fof'))return'🗂️';
   return'🏗️';
 }
@@ -683,8 +705,6 @@ function veredictoStatusLabel(s) {
  
 function renderFii(d, comIa) {
   var pvp = d.pvp;
- 
-  // ── Dados numéricos (sempre exibidos) ─────────────────────────
   var h = '<div class="fii-hdr">' +
     '<div class="fii-ticker">' + ESC(d.ticker) + '</div>' +
     '<div class="fii-src">Fonte: ' + ESC(d.source) + ' · ' + DT(d.lastUpdated) + '</div>' +
@@ -695,30 +715,34 @@ function renderFii(d, comIa) {
     '<div class="metric"><div class="m-label">P/VP</div><div class="m-val ' + pvpCls(pvp) + '">' + NUM(pvp) + '</div><div class="m-note">' + pvpNote(pvp) + '</div></div>' +
     '</div>';
  
-  // ── Análise de IA ──────────────────────────────────────────────
   if (comIa && !d.erroAi) {
     var vc  = {OPORTUNIDADE:'vOPO', NEUTRO:'vNEU', AGUARDAR:'vAGU'}[d.veredicto] || 'vNEU';
     var vi  = {OPORTUNIDADE:'✦',    NEUTRO:'→',    AGUARDAR:'◬'}[d.veredicto]    || '→';
-    var vst = d.veredictoStatus || 'APROVADO';
+    var vst = (d.veredictoStatus || 'APROVADO').replace('_', ' '); // Remove o underline
  
     h += '<div style="border-top:1px solid var(--rule);padding-top:22px;margin-top:8px">' +
          '<div class="ai-hdr"><div class="ai-pip"></div> Análise de IA — Gemini</div>';
  
-    // Tipo + segmento
     if (d.tipo && d.tipo !== 'Desconhecido') {
       h += '<span class="tipo-badge ' + tipoClass(d.tipo) + '">' + tipoIcon(d.tipo) + ' ' + ESC(d.tipo) + '</span>';
     }
     if (d.segmento) { h += '<div class="tipo-desc">' + ESC(d.segmento) + '</div>'; }
- 
-    // P/VP status + veredicto + DY análise
     if (d.pvpStatus) { h += '<span class="pvp-status ' + pvpStatusCls(d.pvpStatus) + '">P/VP: ' + ESC(d.pvpStatus) + '</span><br>'; }
-    h += '<div class="veredicto ' + vc + '" style="margin-top:12px">' + vi + ' ' + ESC(d.veredicto) + '</div>';
+    
+    // NOVO: Veredito Unificado (Ação + Status)
+    h += '<div class="veredicto ' + vc + '" style="margin-top:12px; display:flex; align-items:baseline; flex-wrap:wrap;">' + 
+         vi + ' ' + ESC(d.veredicto) + 
+         '<span style="font-size:0.5em; margin-left:12px; font-family:var(--font-ui); font-weight:600; opacity:0.8; letter-spacing:1px; text-transform:uppercase;">— ' + ESC(vst) + '</span>' +
+         '</div>';
+         
+    // NOVO: Justificativa logo abaixo do Veredito
+    if (d.veredictoJustificativa) {
+        h += '<p style="font-size:.92rem; color:var(--text); font-weight:500; margin-bottom:16px; border-left:3px solid var(--border); padding-left:12px;">' + ESC(d.veredictoJustificativa) + '</p>';
+    }
     if (d.dyAnalise) { h += '<div class="dy-analise">' + ESC(d.dyAnalise) + '</div>'; }
  
-    // Análise principal
     h += '<p style="font-size:.92rem;color:var(--text2);line-height:1.75;margin-bottom:4px">' + ESC(d.analise) + '</p>';
  
-    // ── 1. Análise Histórica ──────────────────────────────────
     var ah = d.analiseHistorica;
     if (ah && (ah.resistenciaCrises || ah.tendencia3Anos)) {
       h += rl('Análise Histórica') +
@@ -730,7 +754,6 @@ function renderFii(d, comIa) {
         '</div>';
     }
  
-    // ── 2. Simulador de Rendimento ───────────────────────────
     var sim = d.simulador;
     if (sim && sim.dividendoPorCota) {
       h += rl('Simulador de Rendimento') +
@@ -747,16 +770,12 @@ function renderFii(d, comIa) {
       h += '<p style="font-size:.7rem;color:var(--text3);margin-top:8px;font-style:italic;">⚠ Simulação baseada no último dividendo conhecido pela IA. Confirme o valor atual nas fontes oficiais antes de tomar qualquer decisão.</p>';
     }
  
-    // ── 3. Critérios condicionais por tipo ───────────────────
     var cc = d.criteriosCondicionais;
     if (cc && cc.length > 0) {
       h += rl('Critérios — ' + ESC(d.tipo||'Fundo')) +
-        '<ul class="crit-list">' +
-        cc.map(function(c) { return '<li>' + ESC(c) + '</li>'; }).join('') +
-        '</ul>';
+        '<ul class="crit-list">' + cc.map(function(c) { return '<li>' + ESC(c) + '</li>'; }).join('') + '</ul>';
     }
  
-    // ── 4. Pontos favoráveis / atenção ───────────────────────
     h += '<div class="pts-row">' +
       '<div class="pts-box fav"><div class="pts-title fav">Favorável</div><ul class="pts-list">' +
       (d.pontosFavoraveis||[]).map(function(p) { return '<li>' + ESC(p) + '</li>'; }).join('') +
@@ -766,22 +785,11 @@ function renderFii(d, comIa) {
       '</ul></div>' +
       '</div>';
  
-    // ── 5. Veredito final ────────────────────────────────────
-    if (d.veredictoStatus) {
-      h += rl('Veredito Final') +
-        '<div class="veredito-final vf-' + vst + '">' +
-        '<div class="vf-title">' + veredictoStatusLabel(vst) + '</div>' +
-        '<div class="vf-just">' + ESC(d.veredictoJustificativa||'') + '</div>' +
-        '</div>';
-    }
- 
-    h += '<p class="disc">' + ESC(d.disclaimer) + '</p>' +
-         '</div>';
+    h += '<p class="disc">' + ESC(d.disclaimer) + '</p></div>';
  
   } else if (comIa && d.erroAi) {
     h += '<div class="error-box" style="margin-top:16px">IA indisponível: ' + ESC(d.mensagemErro) + '</div>';
   }
- 
   return h;
 }
  
