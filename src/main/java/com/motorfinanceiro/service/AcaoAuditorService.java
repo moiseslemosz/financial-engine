@@ -6,6 +6,7 @@ import com.motorfinanceiro.dto.AcaoAnaliseResponseDTO;
 import com.motorfinanceiro.dto.AcaoAnaliseResponseDTO.AnaliseHistoricaAcaoDTO;
 import com.motorfinanceiro.dto.AcaoResponseDTO;
 import com.motorfinanceiro.exception.AiQuotaExceededException;
+import com.motorfinanceiro.util.AcaoDataValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -51,27 +52,32 @@ public class AcaoAuditorService {
      * @return Análise completa com valuação, qualidade, histórico e veredito
      */
     public AcaoAnaliseResponseDTO analisar(AcaoResponseDTO acaoData) {
-        log.info("[AcaoAuditor] Analisando: {} | Cotação: {} | P/L: {} | P/VP: {} | ROE: {}%",
-                acaoData.ticker(), acaoData.cotacao(),
-                acaoData.pl(), acaoData.pvp(), acaoData.roe());
+    log.info("[AcaoAuditor] Analisando: {} | Cotação: {} | P/L: {} | P/VP: {} | ROE: {}%",
+            acaoData.ticker(), acaoData.cotacao(),
+            acaoData.pl(), acaoData.pvp(), acaoData.roe());
 
-        try {
-            String systemPrompt = systemPromptResource.getContentAsString(StandardCharsets.UTF_8);
-            String userMsg      = formatarDados(acaoData);
+    // Validação de sanidade dos dados ANTES de enviar para a IA
+    AcaoDataValidator.ValidationResult validacao = AcaoDataValidator.validar(acaoData);
 
-            String jsonBruto = aiFallbackService.call(systemPrompt, userMsg);
-            log.debug("[AcaoAuditor] Resposta bruta: {}", jsonBruto);
+    try {
+        String systemPrompt = systemPromptResource.getContentAsString(StandardCharsets.UTF_8);
 
-            return parsear(acaoData, jsonBruto);
+        // Anexa os avisos de qualidade de dados ao final da mensagem do usuário
+        String userMsg = formatarDados(acaoData) + AcaoDataValidator.formatarParaPrompt(validacao);
 
-        } catch (AiQuotaExceededException e) {
-            log.error("[AcaoAuditor] Cadeia de fallback esgotada para {}: {}", acaoData.ticker(), e.getMessage());
-            return erro(acaoData, "Serviço de IA temporariamente indisponível. Tente novamente em alguns minutos.");
-        } catch (Exception e) {
-            log.error("[AcaoAuditor] Falha inesperada para {}: {}", acaoData.ticker(), e.getMessage());
-            return erro(acaoData, "Erro ao processar análise: " + e.getMessage());
-        }
+        String jsonBruto = aiFallbackService.call(systemPrompt, userMsg);
+        log.debug("[AcaoAuditor] Resposta bruta: {}", jsonBruto);
+
+        return parsear(acaoData, jsonBruto);
+
+    } catch (AiQuotaExceededException e) {
+        log.error("[AcaoAuditor] Cadeia de fallback esgotada para {}: {}", acaoData.ticker(), e.getMessage());
+        return erro(acaoData, "Serviço de IA temporariamente indisponível. Tente novamente em alguns minutos.");
+    } catch (Exception e) {
+        log.error("[AcaoAuditor] Falha inesperada para {}: {}", acaoData.ticker(), e.getMessage());
+        return erro(acaoData, "Erro ao processar análise: " + e.getMessage());
     }
+}
 
     // =========================================================================
     // FORMATAÇÃO DO PAYLOAD PARA A IA

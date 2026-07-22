@@ -303,6 +303,16 @@
 .acao-hist-item{background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:10px 12px}
 .acao-hist-label{font-size:.67rem;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:4px}
 .acao-hist-val{font-size:.83rem;color:var(--text2);line-height:1.45}
+
+.ctx-setorial{background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:14px 16px;margin-bottom:14px}
+.ctx-descricao{font-size:.88rem;color:var(--text2);line-height:1.65;margin-bottom:12px}
+.ctx-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:480px){.ctx-row{grid-template-columns:1fr}}
+.ctx-label{font-size:.67rem;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);margin-bottom:7px}
+.ctx-chips{display:flex;flex-wrap:wrap;gap:5px}
+.chip-key{font-size:.75rem;background:var(--accent-bg);color:var(--accent);border:1px solid rgba(122,172,216,.25);border-radius:4px;padding:3px 9px}
+.chip-na{font-size:.75rem;background:var(--surface);color:var(--text3);border:1px solid var(--border);border-radius:4px;padding:3px 9px;text-decoration:line-through}
+.ctx-alerta{font-size:.8rem;color:var(--warn);background:var(--warn-bg);border:1px solid rgba(212,148,48,.3);border-radius:5px;padding:8px 12px;margin-top:10px;line-height:1.5}
   </style>
 </head>
 <body>
@@ -491,6 +501,15 @@ function switchTab(id){
     document.querySelectorAll('.nav-tab')[i].classList.toggle('active',t===id);
     document.getElementById('panel-'+t).classList.toggle('active',t===id);
   });
+
+  // Título dinâmico da aba do browser
+  var nomes = {
+    fii:       'FIIs',
+    rendafixa: 'Renda Fixa',
+    copom:     'COPOM',
+    acoes:     'Ações'
+  };
+  document.title = 'Motor Financeiro — ' + (nomes[id] || id);
 }
  
 /* ── HELPERS ── */
@@ -543,6 +562,41 @@ function renderAcao(d,comIa){
   var h='<div class="acao-hdr"><div class="acao-ticker">'+ESC(d.ticker)+'</div><div class="fii-src">Fonte: '+ESC(d.source)+' · '+DT(d.lastUpdated)+'</div></div>';
   if(comIa&&d.empresa){h+='<div class="acao-empresa">'+ESC(d.empresa)+'</div>'}
   if(comIa&&d.setor){h+='<div class="acao-setor">'+ESC(d.setor)+(d.segmento?' · '+ESC(d.segmento):'')+'</div>'}
+
+  if(comIa && d.contextoSetorial) {
+  var ctx = d.contextoSetorial;
+  h += '<div class="ctx-setorial">';
+ 
+  if(ctx.oQueAEmpresaFaz) {
+    h += '<p class="ctx-descricao">' + ESC(ctx.oQueAEmpresaFaz) + '</p>';
+  }
+ 
+  if(ctx.metricasChave && ctx.metricasChave.length > 0) {
+    h += '<div class="ctx-row">' +
+      '<div class="ctx-bloco">' +
+        '<div class="ctx-label">Métricas-chave para este setor</div>' +
+        '<div class="ctx-chips">' +
+        ctx.metricasChave.map(function(m){ return '<span class="chip-key">'+ESC(m)+'</span>'; }).join('') +
+        '</div>' +
+      '</div>';
+ 
+    if(ctx.metricasNaoAplicaveis && ctx.metricasNaoAplicaveis.length > 0) {
+      h += '<div class="ctx-bloco">' +
+        '<div class="ctx-label">Não aplicável neste setor</div>' +
+        '<div class="ctx-chips">' +
+        ctx.metricasNaoAplicaveis.map(function(m){ return '<span class="chip-na">'+ESC(m)+'</span>'; }).join('') +
+        '</div>' +
+      '</div>';
+    }
+    h += '</div>';
+  }
+ 
+  if(ctx.alertaValuacao) {
+    h += '<div class="ctx-alerta">⚠ ' + ESC(ctx.alertaValuacao) + '</div>';
+  }
+ 
+  h += '</div>';
+}
 
   h+='<div class="fund-grid">'+
     '<div class="fund-item"><div class="fund-label">Cotação</div>'+fundVal(d.cotacao,' R$',null,null)+'</div>'+
@@ -901,6 +955,7 @@ function renderCopom(d){
 /* ── INIT ── */
 checkApi();
 initInv();
+document.title = 'Motor Financeiro — FIIs';
 </script>
 </body>
 </html>

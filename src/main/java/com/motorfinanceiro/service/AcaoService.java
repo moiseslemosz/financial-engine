@@ -56,6 +56,7 @@ public class AcaoService {
         String t = ticker.toUpperCase();
         log.info("[AcaoService] Cache MISS para {}. Iniciando cadeia de fontes...", t);
 
+        AcaoResponseDTO partialResult = null;
         StringBuilder errorHistory = new StringBuilder();
 
         // ── Tenta fontes API (Yahoo → brapi) ──────────────────────────────
@@ -64,21 +65,25 @@ public class AcaoService {
                 AcaoResponseDTO result = source.fetch(t);
 
                 if (result.cotacao() == null) {
-                    log.warn("[AcaoService] {} retornou dados mas cotação é null para {}. "
-                            + "Tentando próxima fonte...", source.getSourceName(), t);
                     errorHistory.append(source.getSourceName()).append(": cotação null. ");
                     continue;
                 }
 
-                log.info("[AcaoService] Sucesso via {}: {} | Cotação: {} | P/L: {} | P/VP: {}",
-                        source.getSourceName(), t, result.cotacao(), result.pl(), result.pvp());
-                return result;
+                // VALIDAÇÃO DE QUALIDADE: Exigimos o P/VP. Se tiver, é o dado perfeito.
+                if (result.pvp() != null) {
+                    log.info("[AcaoService] Sucesso via {}: {} | Cotação: {} | P/VP: {}",
+                            source.getSourceName(), t, result.cotacao(), result.pvp());
+                    return result;
+                }
+
+                // Se chegou aqui, a API retornou a cotação, mas veio sem o P/VP.
+                // Guardamos para não quebrar a tela, mas forçamos o loop a continuar.
+                if (partialResult == null) partialResult = result;
+                log.warn("[AcaoService] {} retornou dados incompletos (sem P/VP). Tentando próxima fonte...", source.getSourceName());
 
             } catch (ScraperException e) {
                 if (isTickerNotFound(e)) {
-                    // Ticker inválido — não adianta tentar outras fontes
-                    log.error("[AcaoService] Ticker {} não encontrado em {}. Abortando cadeia.",
-                            t, source.getSourceName());
+                    log.error("[AcaoService] Ticker {} não encontrado em {}. Abortando cadeia.", t, source.getSourceName());
                     throw e;
                 }
                 log.warn("[AcaoService] {} falhou para {}: {}. Tentando próxima fonte...",
@@ -88,18 +93,28 @@ public class AcaoService {
         }
 
         // ── Fallback final: Fundamentus (scraping) ─────────────────────────
-        log.warn("[AcaoService] APIs falharam para {}. Acionando fallback Fundamentus (scraping)...", t);
+        log.warn("[AcaoService] APIs não trouxeram dados completos para {}. Acionando fallback Fundamentus...", t);
         try {
-            AcaoResponseDTO result = fundamentusFallback.fetch(t);
-            log.info("[AcaoService] Sucesso via Fundamentus (fallback): {} | Cotação: {}",
-                    t, result.cotacao());
-            return result;
+            AcaoResponseDTO fundamentusResult = fundamentusFallback.fetch(t);
+            
+            // O Fundamentus é o mais completo. Se ele trouxer a cotação, usamos ele.
+            if (fundamentusResult.cotacao() != null) {
+                log.info("[AcaoService] Sucesso via Fundamentus (fallback): {} | Cotação: {}", t, fundamentusResult.cotacao());
+                return fundamentusResult;
+            }
         } catch (ScraperException e) {
             errorHistory.append("Fundamentus: ").append(e.getMessage());
-            log.error("[AcaoService] Todas as fontes falharam para {}. Histórico: {}", t, errorHistory);
-            throw new ScraperException(
-                    "Todas as fontes de dados falharam para " + t + ". " + errorHistory, e);
+            log.error("[AcaoService] Fallback Fundamentus falhou para {}: {}", t, e.getMessage());
         }
+
+        // ── Resolução ──────────────────────────────────────────────────────
+        // Se as APIs e o Fundamentus falharam em trazer o P/VP, devolvemos a cotação nua da Brapi
+        if (partialResult != null) {
+            log.warn("[AcaoService] Nenhuma fonte trouxe o P/VP para {}. Retornando cotação parcial.", t);
+            return partialResult;
+        }
+
+        throw new ScraperException("Todas as fontes de dados falharam para " + t + ". " + errorHistory);
     }
 
     /**

@@ -28,17 +28,29 @@ public class FiiService {
     private String healthCheckTicker;
  
     public FiiService(
-            @Qualifier("primaryStrategy")  FiiScraperStrategy primaryStrategy,
-            @Qualifier("fallbackStrategy") FiiScraperStrategy fallbackStrategy,
-            Investidor10ScraperStrategy investidor10Strategy,
-            FundamentusFiiScraperStrategy fundamentusFiiStrategy,
-            FiiHistoryRepository fiiHistoryRepository) {
-            
-        this.fiiHistoryRepository = fiiHistoryRepository;
-        
-        // Define a ordem de prioridade: 1. StatusInvest, 2. Fundamentus, , 3. FundsExplorer (Para FIIs tradicionais), 3. Investidor10 (Último recurso)
-        this.scraperChain = List.of(primaryStrategy, fundamentusFiiStrategy, fallbackStrategy, investidor10Strategy);
-    }
+        @Qualifier("primaryStrategy")  FiiScraperStrategy primaryStrategy,
+        @Qualifier("brapiFiiStrategy") FiiScraperStrategy brapiFiiStrategy,
+        @Qualifier("fallbackStrategy") FiiScraperStrategy fallbackStrategy,
+        Investidor10ScraperStrategy investidor10Strategy,
+        FundamentusFiiScraperStrategy fundamentusFiiStrategy,
+        FiiHistoryRepository fiiHistoryRepository) {
+
+    this.fiiHistoryRepository = fiiHistoryRepository;
+
+    // Nova ordem de prioridade:
+    // 1. StatusInvest (scraping, mas geralmente bloqueado por Cloudflare)
+    // 2. brapi.dev (API oficial, contrato estável — NOVA FONTE)
+    // 3. FundamentusFii (scraping, sem auth)
+    // 4. FundsExplorer (scraping)
+    // 5. Investidor10 (scraping, último recurso)
+    this.scraperChain = List.of(
+            primaryStrategy,
+            brapiFiiStrategy,
+            fundamentusFiiStrategy,
+            fallbackStrategy,
+            investidor10Strategy
+    );
+}
  
     @Cacheable(value = "fii", key = "#ticker.toUpperCase()")
     public FiiResponseDTO getFiiData(String ticker) {

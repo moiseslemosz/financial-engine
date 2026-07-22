@@ -74,6 +74,12 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- -->
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+        </dependency>
+
         <!-- ===== DEV / TEST ===== -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
