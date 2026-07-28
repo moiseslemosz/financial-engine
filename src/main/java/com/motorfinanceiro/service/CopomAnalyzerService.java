@@ -3,6 +3,7 @@ package com.motorfinanceiro.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.motorfinanceiro.dto.CopomResponseDTO;
+import com.motorfinanceiro.service.MacroContextService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -27,10 +28,14 @@ public class CopomAnalyzerService {
  
     @Value("classpath:prompts/copom-translator.st")
     private Resource systemPromptResource;
+    private final MacroContextService macroContextService;
  
-    public CopomAnalyzerService(AiFallbackService aiFallbackService, ObjectMapper objectMapper) {
+    public CopomAnalyzerService(AiFallbackService aiFallbackService, 
+                                ObjectMapper objectMapper, 
+                                MacroContextService macroContextService) {
         this.aiFallbackService = aiFallbackService;
         this.objectMapper      = objectMapper;
+        this.macroContextService = macroContextService;
     }
  
     public CopomResponseDTO analisar(String textoAta) {
@@ -65,6 +70,10 @@ public class CopomAnalyzerService {
             }
  
             JsonNode rot    = root.path("rotacaoPortfolio");
+            // Alimenta o contexto macro compartilhado com os outros agentes de IA
+            String viesDetectado = textOr(root, "vies", "NEUTRO");
+            String resumoDetectado = textOr(root, "resumo", "");
+            macroContextService.atualizarContextoCopom(viesDetectado, resumoDetectado);
             return new CopomResponseDTO(
                     textOr(root, "vies",            "NEUTRO"),
                     textOr(root, "titulo",          ""),

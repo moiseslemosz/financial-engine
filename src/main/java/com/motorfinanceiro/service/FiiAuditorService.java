@@ -7,6 +7,7 @@ import com.motorfinanceiro.dto.FiiAnaliseResponseDTO.AnaliseHistoricaDTO;
 import com.motorfinanceiro.dto.FiiAnaliseResponseDTO.SimuladorFiiDTO;
 import com.motorfinanceiro.dto.FiiResponseDTO;
 import com.motorfinanceiro.exception.AiQuotaExceededException;
+import com.motorfinanceiro.service.MacroContextService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -28,13 +29,17 @@ public class FiiAuditorService {
  
     private final AiFallbackService aiFallbackService;
     private final ObjectMapper objectMapper;
+    private final MacroContextService macroContextService;
  
     @Value("classpath:prompts/fii-auditor.st")
     private Resource systemPromptResource;
  
-    public FiiAuditorService(AiFallbackService aiFallbackService, ObjectMapper objectMapper) {
+    public FiiAuditorService(AiFallbackService aiFallbackService, 
+                             ObjectMapper objectMapper, 
+                             MacroContextService macroContextService) {
         this.aiFallbackService = aiFallbackService;
         this.objectMapper      = objectMapper;
+        this.macroContextService = macroContextService;
     }
  
     public FiiAnaliseResponseDTO analisar(FiiResponseDTO fiiData) {
@@ -44,7 +49,7 @@ public class FiiAuditorService {
  
         try {
             String systemPrompt = systemPromptResource.getContentAsString(StandardCharsets.UTF_8);
-            String userMsg      = formatarDados(fiiData);
+            String userMsg    = formatarDados(fiiData) + macroContextService.formatarParaPrompt();
  
             // AiFallbackService trata cota esgotada e timeout automaticamente
             String jsonBruto = aiFallbackService.call(systemPrompt, userMsg);

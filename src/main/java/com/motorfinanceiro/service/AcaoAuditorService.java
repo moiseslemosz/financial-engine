@@ -7,6 +7,8 @@ import com.motorfinanceiro.dto.AcaoAnaliseResponseDTO.AnaliseHistoricaAcaoDTO;
 import com.motorfinanceiro.dto.AcaoResponseDTO;
 import com.motorfinanceiro.exception.AiQuotaExceededException;
 import com.motorfinanceiro.util.AcaoDataValidator;
+import com.motorfinanceiro.model.AiAnaliseHistory;
+import com.motorfinanceiro.repository.AiAnaliseHistoryRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -36,13 +38,20 @@ public class AcaoAuditorService {
 
     private final AiFallbackService aiFallbackService;
     private final ObjectMapper objectMapper;
+    private final MacroContextService macroContextService;
+    private final AiAnaliseHistoryRepository historyRepository;
 
     @Value("classpath:prompts/acao-analyst.st")
     private Resource systemPromptResource;
 
-    public AcaoAuditorService(AiFallbackService aiFallbackService, ObjectMapper objectMapper) {
+    public AcaoAuditorService(AiFallbackService aiFallbackService, 
+                              ObjectMapper objectMapper, 
+                              MacroContextService macroContextService, 
+                              AiAnaliseHistoryRepository historyRepository) {
         this.aiFallbackService = aiFallbackService;
         this.objectMapper      = objectMapper;
+        this.macroContextService = macroContextService;
+        this.historyRepository = historyRepository;
     }
 
     /**
@@ -56,19 +65,35 @@ public class AcaoAuditorService {
             acaoData.ticker(), acaoData.cotacao(),
             acaoData.pl(), acaoData.pvp(), acaoData.roe());
 
-    // Validação de sanidade dos dados ANTES de enviar para a IA
+    // Validação de sanidade dos dados (já implementada na fase anterior)
     AcaoDataValidator.ValidationResult validacao = AcaoDataValidator.validar(acaoData);
+
+    // Busca o veredito anterior para detectar mudança de opinião da IA
+    String veredictoAnterior = historyRepository
+            .findFirstByTickerAndTipoAtivoOrderByAnalisadoEmDesc(acaoData.ticker(), "ACAO")
+            .map(AiAnaliseHistory::getVeredictoStatus)
+            .orElse(null);
 
     try {
         String systemPrompt = systemPromptResource.getContentAsString(StandardCharsets.UTF_8);
 
-        // Anexa os avisos de qualidade de dados ao final da mensagem do usuário
-        String userMsg = formatarDados(acaoData) + AcaoDataValidator.formatarParaPrompt(validacao);
+        // Anexa contexto macro (Selic + viés COPOM) e avisos de qualidade de dados
+        String userMsg = formatarDados(acaoData)
+                + macroContextService.formatarParaPrompt()
+                + AcaoDataValidator.formatarParaPrompt(validacao);
 
-        String jsonBruto = aiFallbackService.call(systemPrompt, userMsg);
+        // Temperatura 0.0 — a análise inclui cálculo de Graham/Bazin,
+        // que deve ser determinístico e reprodutível
+        String jsonBruto = aiFallbackService.call(systemPrompt, userMsg, 0.0);
         log.debug("[AcaoAuditor] Resposta bruta: {}", jsonBruto);
 
-        return parsear(acaoData, jsonBruto);
+        AcaoAnaliseResponseDTO resultado = parsear(acaoData, jsonBruto);
+
+        // Grava no histórico para comparações futuras
+        salvarHistorico(acaoData, resultado);
+
+        // Anexa informação de mudança de veredito, se houver
+        return anexarComparativo(resultado, veredictoAnterior);
 
     } catch (AiQuotaExceededException e) {
         log.error("[AcaoAuditor] Cadeia de fallback esgotada para {}: {}", acaoData.ticker(), e.getMessage());
@@ -77,6 +102,60 @@ public class AcaoAuditorService {
         log.error("[AcaoAuditor] Falha inesperada para {}: {}", acaoData.ticker(), e.getMessage());
         return erro(acaoData, "Erro ao processar análise: " + e.getMessage());
     }
+}
+
+/**
+ * Persiste o veredito desta análise no histórico.
+ * Falhas de gravação são logadas mas não interrompem a resposta ao usuário
+ * — o mesmo padrão de resiliência usado em FiiService.salvarHistorico.
+ */
+private void salvarHistorico(AcaoResponseDTO acao, AcaoAnaliseResponseDTO resultado) {
+    try {
+        AiAnaliseHistory registro = new AiAnaliseHistory(
+                acao.ticker(),
+                "ACAO",
+                resultado.veredicto(),
+                resultado.veredictoStatus(),
+                acao.cotacao(),
+                macroContextService.getSelicAtual()
+        );
+        historyRepository.save(registro);
+        log.debug("[AcaoAuditor] Histórico salvo para {}: {}", acao.ticker(), resultado.veredictoStatus());
+    } catch (Exception e) {
+        log.warn("[AcaoAuditor] Falha ao salvar histórico para {}: {}", acao.ticker(), e.getMessage());
+    }
+}
+
+/**
+ * Se houver um veredito anterior diferente do atual, anexa esse contexto
+ * ao campo veredictoJustificativa para que o frontend possa exibir a mudança.
+ */
+private AcaoAnaliseResponseDTO anexarComparativo(AcaoAnaliseResponseDTO resultado, String veredictoAnterior) {
+    if (veredictoAnterior == null || veredictoAnterior.equals(resultado.veredictoStatus())) {
+        return resultado;
+    }
+
+    String notaMudanca = String.format(
+            " [Mudança detectada: última análise era %s, agora é %s]",
+            veredictoAnterior, resultado.veredictoStatus());
+
+    // Reconstrói o record com a nota de mudança anexada à justificativa
+    return new AcaoAnaliseResponseDTO(
+            resultado.ticker(), resultado.cotacao(), resultado.pl(), resultado.pvp(),
+            resultado.dividendYield(), resultado.roe(), resultado.roic(),
+            resultado.margemLiquida(), resultado.margemEbit(), resultado.evEbitda(),
+            resultado.dividaBrutaPatrim(), resultado.crescRec5a(), resultado.liqCorrente(),
+            resultado.source(), resultado.lastUpdated(),
+            resultado.setor(), resultado.segmento(), resultado.empresa(),
+            resultado.precoJustoGraham(), resultado.precoJustoBazin(), resultado.margemSeguranca(),
+            resultado.veredicto(), resultado.veredictoStatus(),
+            resultado.veredictoJustificativa() + notaMudanca,
+            resultado.analiseValuacao(), resultado.analiseQualidade(), resultado.analiseRisco(),
+            resultado.simulador(),
+            resultado.analiseHistorica(),
+            resultado.pontosFavoraveis(), resultado.pontosAtencao(),
+            resultado.disclaimer(), resultado.erroAi(), resultado.mensagemErro()
+    );
 }
 
     // =========================================================================
